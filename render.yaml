@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smart-plant-fastapi
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.6
+      - key: DEBUG
+        value: false
+      - key: PORT
+        value: 8001
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGINS
+        value: https://smart-plant-watering-system.vercel.app,https://yourmobileapp.com
+      - key: DJANGO_API_URL
+        value: https://smart-plant-backend-39w7.onrender.com/api
+      - key: SECRET_KEY
+        sync: false  # Don't sync with repo

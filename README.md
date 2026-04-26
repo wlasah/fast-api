@@ -108,9 +108,13 @@ Authorization: Token your-auth-token
    DEBUG = false
    PORT = 8001
    CORS_ORIGINS = https://smart-plant-watering-system.vercel.app
+   DATABASE_URL = postgresql://user:password@host:5432/dbname
    DJANGO_API_URL = https://smart-plant-backend-39w7.onrender.com/api
    SECRET_KEY = your-secret-key-here
    ```
+
+   - `DATABASE_URL` should point to the same Render PostgreSQL database used by the Django backend.
+   - `DJANGO_API_URL` enables FastAPI to proxy `/api/*` requests to the Django backend so the deployed service uses the same auth/data store.
 
 7. Click "Deploy"
 

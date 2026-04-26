@@ -16,6 +16,9 @@ services:
         value: 0.0.0.0
       - key: CORS_ORIGINS
         value: https://smart-plant-watering-system.vercel.app,https://yourmobileapp.com
+      - key: DATABASE_URL
+        value: postgresql://user:password@host:5432/dbname
+        sync: false
       - key: DJANGO_API_URL
         value: https://smart-plant-backend-39w7.onrender.com/api
       - key: SECRET_KEY

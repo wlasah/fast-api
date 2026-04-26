@@ -3,7 +3,7 @@ FastAPI Backend for Smart Plant Watering System
 Independent backend with SQLite/PostgreSQL database
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, Header, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
@@ -16,6 +16,7 @@ import os
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+import httpx
 import json
 
 load_dotenv()
@@ -31,6 +32,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./fastapi.db")
+DJANGO_API_URL = os.getenv("DJANGO_API_URL", "")
+
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
@@ -279,6 +282,48 @@ def get_current_user_optional(authorization: Optional[str] = Header(None), db: S
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 
+def build_django_proxy_url(path: str, query: str) -> str:
+    if not DJANGO_API_URL:
+        raise HTTPException(status_code=503, detail="DJANGO_API_URL is not configured")
+
+    base_url = DJANGO_API_URL.rstrip("/")
+    if path.startswith("/api/"):
+        path = path[5:]
+    elif path == "/api":
+        path = ""
+
+    target = f"{base_url}/{path.lstrip('/')}"
+    if query:
+        target = f"{target}?{query}"
+
+    return target
+
+
+async def proxy_to_django(request: Request) -> Response:
+    target_url = build_django_proxy_url(request.url.path, request.url.query)
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in {"host", "content-length", "transfer-encoding", "connection"}}
+    body = await request.body()
+
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        django_response = await client.request(
+            request.method,
+            target_url,
+            headers=headers,
+            content=body,
+            timeout=30.0,
+        )
+
+    excluded_headers = {"content-length", "transfer-encoding", "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "upgrade"}
+    response_headers = {k: v for k, v in django_response.headers.items() if k.lower() not in excluded_headers}
+
+    return Response(
+        content=django_response.content,
+        status_code=django_response.status_code,
+        headers=response_headers,
+        media_type=django_response.headers.get("content-type"),
+    )
+
+
 # ============== FASTAPI APP ==============
 
 app = FastAPI(
@@ -295,6 +340,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if DJANGO_API_URL:
+    @app.api_route("/api", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    async def django_api_proxy(path: str = "", request: Request):
+        return await proxy_to_django(request)
 
 # ============== HEALTH CHECK ==============
 

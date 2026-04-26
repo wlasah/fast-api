@@ -344,7 +344,7 @@ app.add_middleware(
 if DJANGO_API_URL:
     @app.api_route("/api", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    async def django_api_proxy(path: str = "", request: Request):
+    async def django_api_proxy(request: Request, path: str = ""):
         return await proxy_to_django(request)
 
 # ============== HEALTH CHECK ==============

@@ -179,6 +179,11 @@ The `render.yaml` and `Procfile` are already configured for:
 
 Just push to GitHub and Render will auto-deploy!
 
+### Step 4: Keep Render Warm
+Render free tier can hibernate after inactivity, which may cause the first request to return `429 Too Many Requests` while it wakes up.
+
+A GitHub Actions workflow is included at `.github/workflows/keep-fastapi-warm.yml` to ping `https://fast-api-g456.onrender.com/health` every 15 minutes and keep the service responsive during your demo.
+
 ---
 
 ## ✅ Checklist: Local Testing

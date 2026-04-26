@@ -6,7 +6,7 @@ Independent backend with SQLite/PostgreSQL database
 from fastapi import FastAPI, HTTPException, Depends, Header, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from pydantic import BaseModel
@@ -80,6 +80,10 @@ class Plant(Base):
     owner = relationship("User", back_populates="plants")
     watering_history = relationship("WateringHistory", back_populates="plant", cascade="all, delete-orphan")
 
+    @property
+    def owner_username(self):
+        return self.owner.username if self.owner else None
+
 
 class WateringHistory(Base):
     __tablename__ = "watering_history"
@@ -101,6 +105,21 @@ class Token(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="tokens")
+
+
+class AdminActionLog(Base):
+    __tablename__ = "admin_action_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    action_type = Column(String, index=True)
+    admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    target_user_id = Column(Integer, index=True)
+    target_username = Column(String)
+    target_user_email = Column(String, nullable=True)
+    details = Column(JSON, default={})
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    admin_user = relationship("User")
 
 
 # Create tables
@@ -152,6 +171,7 @@ class PlantResponse(BaseModel):
     location: str
     moisture: float
     owner_id: int
+    owner_username: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -175,6 +195,20 @@ class WaterPlantRequest(BaseModel):
 class TokenResponse(BaseModel):
     token: str
     user: UserResponse
+
+
+class AdminActionLogResponse(BaseModel):
+    id: int
+    action_type: str
+    admin_user_id: Optional[int] = None
+    target_user_id: int
+    target_username: str
+    target_user_email: Optional[str] = None
+    details: dict
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # ============== DEPENDENCIES ==============
@@ -467,6 +501,19 @@ async def get_users(current_user: User = Depends(get_current_user), db: Session 
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return [UserResponse.from_orm(u) for u in db.query(User).all()]
+
+
+@app.get("/api/users/get_user_actions/", response_model=List[AdminActionLogResponse], tags=["Users"])
+async def get_user_actions(target_user_id: int, limit: int = 10, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get recent admin actions for a target user (admin only)"""
+    if not current_user.is_staff:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    action_query = db.query(AdminActionLog).filter(AdminActionLog.target_user_id == target_user_id).order_by(AdminActionLog.timestamp.desc())
+    if limit > 0:
+        action_query = action_query.limit(limit)
+
+    return action_query.all()
 
 
 @app.get("/api/users/{user_id}/", response_model=UserResponse, tags=["Users"])

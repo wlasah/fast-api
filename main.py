@@ -248,10 +248,12 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
         raise HTTPException(status_code=401, detail="Missing authorization header")
 
     try:
-        # Handle "Token <token>" format
+        # Handle common auth header formats
         token_str = authorization
         if token_str.startswith("Token "):
             token_str = token_str[6:]
+        elif token_str.startswith("Bearer "):
+            token_str = token_str[7:]
 
         # Try to decode JWT
         try:
@@ -290,6 +292,8 @@ def get_current_user_optional(authorization: Optional[str] = Header(None), db: S
         token_str = authorization
         if token_str.startswith("Token "):
             token_str = token_str[6:]
+        elif token_str.startswith("Bearer "):
+            token_str = token_str[7:]
 
         try:
             payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])

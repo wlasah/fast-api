@@ -114,6 +114,7 @@ Authorization: Token your-auth-token
    ```
 
    - `DATABASE_URL` should point to the same Render PostgreSQL database used by the Django backend.
+   - If your original Render PostgreSQL instance expired, create a new PostgreSQL database service and paste its connection URL here.
    - `DJANGO_API_URL` enables FastAPI to proxy `/api/*` requests to the Django backend so the deployed service uses the same auth/data store.
 
 7. Click "Deploy"

@@ -379,12 +379,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if DJANGO_API_URL:
-    @app.api_route("/api", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    async def django_api_proxy(request: Request, path: str = ""):
-        return await proxy_to_django(request)
-
 # ============== HEALTH CHECK ==============
 
 @app.get("/health", tags=["Health"])
@@ -1044,6 +1038,13 @@ async def setup_register_admin(user_data: UserRegister, db: Session = Depends(ge
         "token": token,
         "user": UserResponse.from_orm(user)
     }
+
+
+if DJANGO_API_URL:
+    @app.api_route("/api", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    async def django_api_proxy(request: Request, path: str = ""):
+        return await proxy_to_django(request)
 
 
 # ============== ROOT ==============

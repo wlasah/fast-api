@@ -96,6 +96,35 @@ class WateringHistory(Base):
     plant = relationship("Plant", back_populates="watering_history")
 
 
+class DeviceTelemetry(Base):
+    __tablename__ = "device_telemetry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, index=True)
+    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
+    soil_raw = Column(Integer)
+    soil_percent = Column(Float)
+    pump = Column(Boolean, default=False)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    plant = relationship("Plant", backref="telemetry")
+
+
+class DeviceConfig(Base):
+    __tablename__ = "device_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, unique=True, index=True)
+    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
+    auto_water = Column(Boolean, default=True)
+    dry_threshold = Column(Integer, default=2500)
+    wet_threshold = Column(Integer, default=1500)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    plant = relationship("Plant", backref="device_config")
+
+
 class Token(Base):
     __tablename__ = "tokens"
 
@@ -183,6 +212,50 @@ class WateringHistoryResponse(BaseModel):
     plant_id: int
     watered_at: datetime
     notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class DeviceTelemetryCreate(BaseModel):
+    device_id: str
+    soil_raw: int
+    soil_percent: float
+    pump: bool
+    plant_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DeviceTelemetryResponse(BaseModel):
+    id: int
+    device_id: str
+    plant_id: Optional[int] = None
+    soil_raw: int
+    soil_percent: float
+    pump: bool
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DeviceConfigCreate(BaseModel):
+    device_id: str
+    plant_id: Optional[int] = None
+    auto_water: Optional[bool] = True
+    dry_threshold: Optional[int] = 2500
+    wet_threshold: Optional[int] = 1500
+
+
+class DeviceConfigResponse(BaseModel):
+    id: int
+    device_id: str
+    plant_id: Optional[int] = None
+    auto_water: bool
+    dry_threshold: int
+    wet_threshold: int
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -391,6 +464,74 @@ async def health_check():
         "debug": DEBUG,
         "database": "SQLite" if "sqlite" in DATABASE_URL else "PostgreSQL"
     }
+
+
+@app.post("/api/iot/telemetry/", response_model=DeviceTelemetryResponse, tags=["IoT"])
+async def create_iot_telemetry(payload: DeviceTelemetryCreate, db: Session = Depends(get_db)):
+    """Receive telemetry from ESP32 and optionally associate it with a plant."""
+    telemetry = DeviceTelemetry(
+        device_id=payload.device_id,
+        plant_id=payload.plant_id,
+        soil_raw=payload.soil_raw,
+        soil_percent=payload.soil_percent,
+        pump=payload.pump,
+        notes=payload.notes,
+    )
+    db.add(telemetry)
+
+    if payload.plant_id is not None:
+        plant = db.query(Plant).filter(Plant.id == payload.plant_id).first()
+        if plant:
+            plant.moisture = payload.soil_percent
+            db.add(plant)
+
+    db.commit()
+    db.refresh(telemetry)
+    return telemetry
+
+
+@app.get("/api/iot/telemetry/", response_model=List[DeviceTelemetryResponse], tags=["IoT"])
+async def list_iot_telemetry(device_id: Optional[str] = None, limit: int = 20, db: Session = Depends(get_db)):
+    query = db.query(DeviceTelemetry).order_by(DeviceTelemetry.created_at.desc())
+    if device_id:
+        query = query.filter(DeviceTelemetry.device_id == device_id)
+    telemetry = query.limit(limit).all()
+    return telemetry
+
+
+@app.post("/api/iot/config/", response_model=DeviceConfigResponse, tags=["IoT"])
+async def create_or_update_device_config(config: DeviceConfigCreate, db: Session = Depends(get_db)):
+    device_config = db.query(DeviceConfig).filter(DeviceConfig.device_id == config.device_id).first()
+    if not device_config:
+        device_config = DeviceConfig(
+            device_id=config.device_id,
+            plant_id=config.plant_id,
+            auto_water=config.auto_water,
+            dry_threshold=config.dry_threshold,
+            wet_threshold=config.wet_threshold,
+        )
+        db.add(device_config)
+    else:
+        if config.plant_id is not None:
+            device_config.plant_id = config.plant_id
+        if config.auto_water is not None:
+            device_config.auto_water = config.auto_water
+        if config.dry_threshold is not None:
+            device_config.dry_threshold = config.dry_threshold
+        if config.wet_threshold is not None:
+            device_config.wet_threshold = config.wet_threshold
+
+    db.commit()
+    db.refresh(device_config)
+    return device_config
+
+
+@app.get("/api/iot/config/{device_id}/", response_model=DeviceConfigResponse, tags=["IoT"])
+async def get_device_config(device_id: str, db: Session = Depends(get_db)):
+    device_config = db.query(DeviceConfig).filter(DeviceConfig.device_id == device_id).first()
+    if not device_config:
+        raise HTTPException(status_code=404, detail="Device config not found")
+    return device_config
 
 
 # ============== AUTHENTICATION ENDPOINTS ==============

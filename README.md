@@ -72,7 +72,16 @@ The server will start at `http://localhost:8001`
 ### Plants (Relay to Django)
 - `GET /api/plants` - List all plants
 - `GET /api/plants/{plant_id}` - Get plant details
-- `POST /api/plants/{plant_id}/water` - Water a plant
+- `POST /api/plants/{plant_id}/water` - Water a plant (creates manual water command for a linked ESP32 device)
+
+### IoT Device Endpoints
+- `POST /api/iot/telemetry/` - Receive telemetry from ESP32
+- `GET /api/iot/telemetry/` - List telemetry by device
+- `POST /api/iot/config/` - Create or update device configuration
+- `GET /api/iot/config/{device_id}/` - Get device configuration
+- `POST /api/iot/commands/` - Create a manual device command
+- `GET /api/iot/commands/{device_id}/` - Poll pending device commands
+- `POST /api/iot/commands/{command_id}/ack/` - Acknowledge command execution
 
 ### FastAPI-Specific Analytics
 - `GET /api/analytics/plant-trends` - Plant health trends

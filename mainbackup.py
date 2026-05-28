@@ -96,51 +96,6 @@ class WateringHistory(Base):
     plant = relationship("Plant", back_populates="watering_history")
 
 
-class DeviceTelemetry(Base):
-    __tablename__ = "device_telemetry"
-
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, index=True)
-    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
-    soil_raw = Column(Integer)
-    soil_percent = Column(Float)
-    pump = Column(Boolean, default=False)
-    notes = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    plant = relationship("Plant", backref="telemetry")
-
-
-class DeviceConfig(Base):
-    __tablename__ = "device_config"
-
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, unique=True, index=True)
-    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
-    auto_water = Column(Boolean, default=True)
-    dry_threshold = Column(Integer, default=2500)
-    wet_threshold = Column(Integer, default=1500)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    plant = relationship("Plant", backref="device_config")
-
-
-class DeviceCommand(Base):
-    __tablename__ = "device_commands"
-
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, index=True)
-    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
-    command_type = Column(String, index=True)
-    duration_seconds = Column(Integer, default=5)
-    status = Column(String, default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    executed_at = Column(DateTime, nullable=True)
-    details = Column(JSON, default={})
-
-    plant = relationship("Plant", backref="device_commands")
-
-
 class Token(Base):
     __tablename__ = "tokens"
 
@@ -231,78 +186,6 @@ class WateringHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class DeviceTelemetryCreate(BaseModel):
-    device_id: str
-    soil_raw: int
-    soil_percent: float
-    pump: bool
-    plant_id: Optional[int] = None
-    notes: Optional[str] = None
-
-
-class DeviceTelemetryResponse(BaseModel):
-    id: int
-    device_id: str
-    plant_id: Optional[int] = None
-    soil_raw: int
-    soil_percent: float
-    pump: bool
-    notes: Optional[str] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class DeviceConfigCreate(BaseModel):
-    device_id: str
-    plant_id: Optional[int] = None
-    auto_water: Optional[bool] = True
-    dry_threshold: Optional[int] = 2500
-    wet_threshold: Optional[int] = 1500
-
-
-class DeviceConfigResponse(BaseModel):
-    id: int
-    device_id: str
-    plant_id: Optional[int] = None
-    auto_water: bool
-    dry_threshold: int
-    wet_threshold: int
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class DeviceCommandCreate(BaseModel):
-    device_id: Optional[str] = None
-    plant_id: Optional[int] = None
-    command_type: str
-    duration_seconds: Optional[int] = 5
-    notes: Optional[str] = None
-
-
-class DeviceCommandResponse(BaseModel):
-    id: int
-    device_id: str
-    plant_id: Optional[int] = None
-    command_type: str
-    duration_seconds: int
-    status: str
-    created_at: datetime
-    executed_at: Optional[datetime] = None
-    details: Optional[dict] = None
-
-    class Config:
-        from_attributes = True
-
-
-class DeviceCommandAck(BaseModel):
-    success: bool
-    executed_at: datetime
 
 
 class WaterPlantRequest(BaseModel):
@@ -508,150 +391,6 @@ async def health_check():
         "debug": DEBUG,
         "database": "SQLite" if "sqlite" in DATABASE_URL else "PostgreSQL"
     }
-
-
-@app.post("/api/iot/telemetry/", response_model=DeviceTelemetryResponse, tags=["IoT"])
-async def create_iot_telemetry(payload: DeviceTelemetryCreate, db: Session = Depends(get_db)):
-    """Receive telemetry from ESP32 and optionally associate it with a plant."""
-    print(f"[IOT_TELEMETRY_POST] Received: device_id={payload.device_id}, plant_id={payload.plant_id}, moisture={payload.soil_percent}%")
-    
-    plant_id = payload.plant_id
-
-    if plant_id is None:
-        device_config = db.query(DeviceConfig).filter(DeviceConfig.device_id == payload.device_id).first()
-        if device_config and device_config.plant_id is not None:
-            plant_id = device_config.plant_id
-            print(f"[IOT_TELEMETRY_POST] Found plant_id {plant_id} from device config")
-
-    telemetry = DeviceTelemetry(
-        device_id=payload.device_id,
-        plant_id=plant_id,
-        soil_raw=payload.soil_raw,
-        soil_percent=payload.soil_percent,
-        pump=payload.pump,
-        notes=payload.notes,
-    )
-    db.add(telemetry)
-
-    if plant_id is not None:
-        plant = db.query(Plant).filter(Plant.id == plant_id).first()
-        if plant:
-            plant.moisture = payload.soil_percent
-            db.add(plant)
-            print(f"[IOT_TELEMETRY_POST] Updated plant {plant_id} moisture to {payload.soil_percent}%")
-        else:
-            print(f"[IOT_TELEMETRY_POST] Plant {plant_id} not found!")
-    else:
-        print(f"[IOT_TELEMETRY_POST] No plant_id, telemetry stored without plant link")
-
-    db.commit()
-    db.refresh(telemetry)
-    print(f"[IOT_TELEMETRY_POST] Saved telemetry record {telemetry.id}")
-    return telemetry
-
-
-@app.get("/api/iot/telemetry/", response_model=List[DeviceTelemetryResponse], tags=["IoT"])
-async def list_iot_telemetry(device_id: Optional[str] = None, limit: int = 20, db: Session = Depends(get_db)):
-    print(f"[IOT_TELEMETRY] GET requested: device_id={device_id}, limit={limit}")
-    query = db.query(DeviceTelemetry).order_by(DeviceTelemetry.created_at.desc())
-    if device_id:
-        query = query.filter(DeviceTelemetry.device_id == device_id)
-    telemetry = query.limit(limit).all()
-    print(f"[IOT_TELEMETRY] Returning {len(telemetry)} records for device_id={device_id}")
-    return telemetry
-
-
-@app.post("/api/iot/config/", response_model=DeviceConfigResponse, tags=["IoT"])
-async def create_or_update_device_config(config: DeviceConfigCreate, db: Session = Depends(get_db)):
-    print(f"[IOT_CONFIG] POST received: device_id={config.device_id}, plant_id={config.plant_id}")
-    
-    device_config = db.query(DeviceConfig).filter(DeviceConfig.device_id == config.device_id).first()
-    if not device_config:
-        print(f"[IOT_CONFIG] Creating new config for device: {config.device_id}")
-        device_config = DeviceConfig(
-            device_id=config.device_id,
-            plant_id=config.plant_id,
-            auto_water=config.auto_water,
-            dry_threshold=config.dry_threshold,
-            wet_threshold=config.wet_threshold,
-        )
-        db.add(device_config)
-    else:
-        print(f"[IOT_CONFIG] Updating existing config for device: {config.device_id}")
-        if config.plant_id is not None:
-            device_config.plant_id = config.plant_id
-        if config.auto_water is not None:
-            device_config.auto_water = config.auto_water
-        if config.dry_threshold is not None:
-            device_config.dry_threshold = config.dry_threshold
-        if config.wet_threshold is not None:
-            device_config.wet_threshold = config.wet_threshold
-
-    db.commit()
-    db.refresh(device_config)
-    print(f"[IOT_CONFIG] Saved: device_id={device_config.device_id}, plant_id={device_config.plant_id}")
-    return device_config
-
-
-@app.get("/api/iot/config/{device_id}/", response_model=DeviceConfigResponse, tags=["IoT"])
-async def get_device_config(device_id: str, db: Session = Depends(get_db)):
-    device_config = db.query(DeviceConfig).filter(DeviceConfig.device_id == device_id).first()
-    if not device_config:
-        raise HTTPException(status_code=404, detail="Device config not found")
-    return device_config
-
-
-@app.post("/api/iot/commands/", response_model=DeviceCommandResponse, tags=["IoT"])
-async def create_device_command(command: DeviceCommandCreate, db: Session = Depends(get_db)):
-    if not command.device_id and not command.plant_id:
-        raise HTTPException(status_code=400, detail="device_id or plant_id is required")
-
-    device_id = command.device_id
-    if not device_id and command.plant_id is not None:
-        device_config = db.query(DeviceConfig).filter(DeviceConfig.plant_id == command.plant_id).first()
-        if not device_config:
-            raise HTTPException(status_code=404, detail="Device config for plant not found")
-        device_id = device_config.device_id
-
-    if not device_id:
-        raise HTTPException(status_code=400, detail="Unable to determine device_id")
-
-    device_command = DeviceCommand(
-        device_id=device_id,
-        plant_id=command.plant_id,
-        command_type=command.command_type,
-        duration_seconds=command.duration_seconds or 5,
-        status="pending",
-        details={"notes": command.notes} if command.notes else {},
-    )
-    db.add(device_command)
-    db.commit()
-    db.refresh(device_command)
-    return device_command
-
-
-@app.get("/api/iot/commands/{device_id}/", response_model=List[DeviceCommandResponse], tags=["IoT"])
-async def get_device_commands(device_id: str, db: Session = Depends(get_db)):
-    commands = db.query(DeviceCommand).filter(
-        DeviceCommand.device_id == device_id,
-        DeviceCommand.status == "pending"
-    ).order_by(DeviceCommand.created_at.asc()).all()
-    return commands
-
-
-@app.post("/api/iot/commands/{command_id}/ack/", response_model=DeviceCommandResponse, tags=["IoT"])
-async def ack_device_command(command_id: int, db: Session = Depends(get_db)):
-    command = db.query(DeviceCommand).filter(DeviceCommand.id == command_id).first()
-    if not command:
-        raise HTTPException(status_code=404, detail="Command not found")
-    if command.status != "pending":
-        raise HTTPException(status_code=400, detail="Command already executed or invalid")
-
-    command.status = "executed"
-    command.executed_at = datetime.utcnow()
-    db.commit()
-    db.refresh(command)
-    return command
 
 
 # ============== AUTHENTICATION ENDPOINTS ==============
@@ -990,26 +729,15 @@ async def water_plant(plant_id: int, water_data: WaterPlantRequest, current_user
     if plant.owner_id != current_user.id and not current_user.is_staff:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Record watering history only; actual moisture should be updated by real sensor telemetry
+    # Update moisture level
+    plant.moisture = min(100.0, plant.moisture + 30)
+
+    # Record history
     history = WateringHistory(
         plant_id=plant_id,
         notes=water_data.notes
     )
     db.add(history)
-
-    # Create manual watering command for ESP32 if device is configured for this plant
-    device_config = db.query(DeviceConfig).filter(DeviceConfig.plant_id == plant_id).first()
-    if device_config and device_config.device_id:
-        device_command = DeviceCommand(
-            device_id=device_config.device_id,
-            plant_id=plant_id,
-            command_type="water",
-            duration_seconds=5,
-            status="pending",
-            details={"source": "manual_button", "notes": water_data.notes or "Manual water command"},
-        )
-        db.add(device_command)
-
     db.commit()
     db.refresh(history)
 

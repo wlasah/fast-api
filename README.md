@@ -1,216 +1,195 @@
-# Smart Plant Watering System - FastAPI Backend
+# 🌱 Smart Plant Watering System - FastAPI Backend
 
-FastAPI backend running alongside Django backend to provide additional analytics and features.
+This FastAPI service is the independent IoT backend for the Smart Plant Watering System. It receives ESP32 telemetry, manages device configuration, exposes plant and telemetry APIs, and can proxy select requests to a Django backend.
 
-## Features
+## What this service does
 
-- **Relay Endpoints**: Proxy requests to Django backend for compatibility
-- **Plant Analytics**: Advanced trend analysis and health tracking
-- **Watering Schedule**: Intelligent recommendations for watering plants
-- **User Summary**: Aggregated user statistics
-- **Token Verification**: Token validation with Django backend
-- **CORS Support**: Works with web (Vercel) and mobile apps
+- Stores IoT telemetry data from ESP32 devices
+- Updates plant moisture values based on telemetry
+- Provides device configuration and command endpoints
+- Handles user authentication and token validation
+- Exposes plant list, watering history, and analytics endpoints
+- Supports local development and deployment to cloud hosts
 
-## Local Development
+## Requirements
 
-### Setup Virtual Environment
+- Python 3.11+ (recommended)
+- `pip`
+- `virtualenv` or built-in `venv`
 
-```bash
-cd fastapi-backend
+## Local Setup
 
-# Create virtual environment
-python -m venv venv
+1. Open a terminal in the FastAPI project:
+   ```powershell
+   cd e:\Download\appdev\fast-api
+   ```
 
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-```
+2. Create a virtual environment:
+   ```powershell
+   python -m venv .venv
+   ```
 
-### Install Dependencies
+3. Activate the environment:
+   ```powershell
+   .\.venv\Scripts\Activate.ps1
+   ```
 
-```bash
-pip install -r requirements.txt
-```
+4. Install dependencies:
+   ```powershell
+   pip install -r requirements.txt
+   ```
 
-### Configure Environment
+5. Copy `.env.example` to `.env` and edit values:
+   ```powershell
+   copy .env.example .env
+   ```
 
-Create `.env` file:
+## Environment Configuration
 
-```bash
-cp .env.example .env
-```
+Example `.env` values:
 
-Edit `.env` with your configuration:
-
-```
+```env
 DEBUG=True
+HOST=0.0.0.0
+PORT=8001
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.10:8001
+DATABASE_URL=sqlite:///./fastapi.db
 DJANGO_API_URL=http://localhost:8000/api
-CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+SECRET_KEY=your-secret-key-here
 ```
 
-### Run Development Server
+**If your web app, mobile device, or ESP32 runs on another machine, use the backend host machine's LAN IP address in the frontend/mobile configuration.**
 
-```bash
-uvicorn main:app --reload --port 8001
+For example, `REACT_APP_API_URL` or `EXPO_PUBLIC_API_URL` should be set to:
+
+```env
+http://<YOUR_BACKEND_IP>:8001
 ```
 
-The server will start at `http://localhost:8001`
+### Important settings
 
-### Access API Documentation
+- `CORS_ORIGINS`: Add the frontend/mobile URLs that will access this API.
+- `DJANGO_API_URL`: Optional proxy destination if Django handles some routes.
+- `DATABASE_URL`: Defaults to SQLite `sqlite:///./fastapi.db`.
+- `SECRET_KEY`: Used for JWT token generation.
 
-- Swagger UI: http://localhost:8001/docs
-- ReDoc: http://localhost:8001/redoc
+## Run the server
 
-## API Endpoints
+```powershell
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
+```
 
-### Health & Status
-- `GET /` - Welcome message
-- `GET /health` - Health check
+Then access:
 
-### Plants (Relay to Django)
-- `GET /api/plants` - List all plants
-- `GET /api/plants/{plant_id}` - Get plant details
-- `POST /api/plants/{plant_id}/water` - Water a plant (creates manual water command for a linked ESP32 device)
+- API: `http://localhost:8001`
+- Swagger UI: `http://localhost:8001/docs`
+- ReDoc: `http://localhost:8001/redoc`
 
-### IoT Device Endpoints
-- `POST /api/iot/telemetry/` - Receive telemetry from ESP32
-- `GET /api/iot/telemetry/` - List telemetry by device
-- `POST /api/iot/config/` - Create or update device configuration
-- `GET /api/iot/config/{device_id}/` - Get device configuration
-- `POST /api/iot/commands/` - Create a manual device command
-- `GET /api/iot/commands/{device_id}/` - Poll pending device commands
-- `POST /api/iot/commands/{command_id}/ack/` - Acknowledge command execution
+## Key API Endpoints
 
-### FastAPI-Specific Analytics
-- `GET /api/analytics/plant-trends` - Plant health trends
-- `GET /api/analytics/watering-schedule` - Watering recommendations
-- `GET /api/users/summary` - User statistics summary
-- `POST /api/auth/verify-token` - Verify token validity
+### Health
+- `GET /health`
+
+### IoT telemetry and device management
+- `POST /api/iot/telemetry/` — receive sensor telemetry
+- `GET /api/iot/telemetry/` — list telemetry records
+- `POST /api/iot/config/` — create/update device config
+- `GET /api/iot/config/{device_id}/` — get device config
+- `POST /api/iot/commands/` — create device command
+- `GET /api/iot/commands/{device_id}/` — poll pending commands
+- `POST /api/iot/commands/{command_id}/ack/` — acknowledge command execution
+
+### Plant endpoints
+- `GET /api/plants/` — list plants for current user
+- `GET /api/plants/{plant_id}/` — get plant details
+- `POST /api/plants/{plant_id}/water/` — record manual watering
+- `GET /api/plants/needing_water/` — plants with low moisture
+- `GET /api/plants/stats/` — plant statistics for user
+
+### User authentication
+- `POST /api/users/register/` — register user
+- `POST /api/users/login/` — login and receive token
+- `GET /api/users/me/` — current user profile
+- `POST /api/users/logout/` — logout
 
 ## Authentication
 
-All API endpoints require `Authorization` header:
+Protect API calls with the `Authorization` header:
 
-```
-Authorization: Token your-auth-token
-```
-
-## Deployment on Render
-
-### Option 1: Using GitHub Integration
-
-1. Push this code to GitHub
-2. Go to https://dashboard.render.com
-3. Click "New +" → "Web Service"
-4. Connect GitHub and select repository
-5. Fill in configuration:
-   - **Name**: `smart-plant-fastapi`
-   - **Environment**: `Python 3.11`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - **Plan**: Free
-
-6. Add Environment Variables:
-   ```
-   DEBUG = false
-   PORT = 8001
-   CORS_ORIGINS = https://smart-plant-watering-system.vercel.app
-   DATABASE_URL = postgresql://user:password@host:5432/dbname
-   DJANGO_API_URL = https://smart-plant-backend-39w7.onrender.com/api
-   SECRET_KEY = your-secret-key-here
-   ```
-
-   - `DATABASE_URL` should point to the same Render PostgreSQL database used by the Django backend.
-   - If your original Render PostgreSQL instance expired, create a new PostgreSQL database service and paste its connection URL here.
-   - `DJANGO_API_URL` enables FastAPI to proxy `/api/*` requests to the Django backend so the deployed service uses the same auth/data store.
-
-7. Click "Deploy"
-
-### Option 2: Using Render CLI
-
-```bash
-# Install Render CLI
-npm i -g @render-com/cli
-
-# Authenticate
-render login
-
-# Deploy
-render deploy
+```http
+Authorization: Token <your_token_here>
 ```
 
-## Integration with Frontend
+## Integration Notes
 
-### React Web App
+### Mobile app
+- Set `EXPO_PUBLIC_API_URL` to this FastAPI host in `Smart-Plant-Watering-System-Mobile/.env`
+- Use the backend machine's LAN IP if the mobile device is on a different device or physical network
+- Restart Expo after changing `.env`
 
-Update `src/services/api.js` to include FastAPI endpoints:
+### Web app
+- Set `REACT_APP_API_URL` to this backend host in the web app `.env` file
+- Use the backend machine's LAN IP if the web app is running from another computer
+- Restart the React development server after changing `.env`
 
-```javascript
-const fastapi = {
-  getTrends: () => fetchWithToken('https://your-fastapi-url/api/analytics/plant-trends'),
-  getSchedule: () => fetchWithToken('https://your-fastapi-url/api/analytics/watering-schedule'),
-  getUsersSummary: () => fetchWithToken('https://your-fastapi-url/api/users/summary'),
-};
-```
-
-### React Native Mobile App
-
-Similarly update the mobile API service to include FastAPI endpoints.
-
-## Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DEBUG` | Enable debug mode | `true` (development) / `false` (production) |
-| `PORT` | Server port | `8001` |
-| `HOST` | Server host | `0.0.0.0` |
-| `CORS_ORIGINS` | Allowed CORS origins (comma-separated) | `https://app.vercel.app,http://localhost:3000` |
-| `DJANGO_API_URL` | Django backend URL | `https://django-api.onrender.com/api` |
-| `SECRET_KEY` | JWT secret key | Generate a random string |
+### ESP32
+- Send telemetry to `/api/iot/telemetry/`
+- Ensure the ESP32 backend URL matches the machine running FastAPI
 
 ## Troubleshooting
 
-### Port Already in Use
+### Backend address issues
+- Use the host machine LAN IP instead of `localhost` when mobile or other device needs access.
+- Example: `http://192.168.1.10:8001`
 
-```bash
-# Kill process on port 8001 (Windows)
-netstat -ano | findstr :8001
-taskkill /PID <PID> /F
+### Command does not execute
+- Confirm `device_id` and `plant_id` are valid in the database
+- Check `GET /api/iot/commands/{device_id}/` for pending commands
 
-# Kill process on port 8001 (macOS/Linux)
-lsof -ti:8001 | xargs kill -9
-```
+### Dependency problems
 
-### Import Errors
-
-Make sure all dependencies are installed:
-
-```bash
+```powershell
+git clean -fdx
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### CORS Errors
+### Port in use
 
-Check that `CORS_ORIGINS` environment variable includes your frontend URL.
+```powershell
+netstat -ano | findstr :8001
+taskkill /PID <PID> /F
+```
 
 ## Project Structure
 
 ```
-fastapi-backend/
-├── main.py                 # FastAPI application
-├── requirements.txt        # Python dependencies
-├── .env.example           # Environment variables template
-├── .gitignore             # Git ignore rules
-├── Procfile               # Render deployment config
-├── render.yaml            # Alternative Render config
-└── README.md              # This file
+fast-api/
+├── main.py            # FastAPI application and routes
+├── requirements.txt   # Python dependencies
+├── .env.example       # Environment variable template
+├── Procfile           # Render deployment file
+├── render.yaml        # Render config file
+├── README.md          # This file
+└── fastapi.db         # SQLite database file (local development)
 ```
+
+## Deployment
+
+### Local development
+- Use `uvicorn main:app --reload --host 0.0.0.0 --port 8001`
+
+### Render deployment
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+Add environment variables in Render for `DJANGO_API_URL`, `DATABASE_URL`, `SECRET_KEY`, and `CORS_ORIGINS`.
 
 ## Support
 
-For issues or questions, refer to:
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [Render Dashboard](https://dashboard.render.com)
-- Django Backend: https://github.com/wlasah/Smart-Plant-Watering-System
+For more details, consult FastAPI docs:
+- https://fastapi.tiangolo.com/
+
+For full system architecture and frontend integration, see the parent repository documentation.
+

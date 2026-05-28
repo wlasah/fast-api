@@ -1,249 +1,115 @@
-# FastAPI Backend - Complete Guide
+﻿# FastAPI Backend - Complete Guide
 
 ## ✅ What's New
 
-FastAPI is now **completely independent** with:
-- ✅ SQLite database (SQLAlchemy ORM)
-- ✅ All endpoints implemented
-- ✅ User authentication with JWT tokens
-- ✅ Plants management
-- ✅ Watering history tracking
-- ✅ Admin functionality
+FastAPI is now the independent IoT backend for the Smart Plant Watering System. It handles telemetry, user authentication, plant management, watering history, and integration with the mobile and web apps.
 
-**Database File**: `fastapi.db` (SQLite, ~52KB)
+## Starting FastAPI Locally
 
----
-
-## 🚀 Starting FastAPI Locally
-
-### Option 1: With Auto-Reload (Development)
 ```bash
-cd "e:\Smart Plant Watering System\fastapi-backend"
-"e:\Smart Plant Watering System\.venv\Scripts\python" -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
+cd "e:\Download\appdev\fast-api"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-### Option 2: Direct Python Run
-```bash
-cd "e:\Smart Plant Watering System\fastapi-backend"
-"e:\Smart Plant Watering System\.venv\Scripts\python" main.py
+Once FastAPI is running, verify:
+- `http://localhost:8001`
+- `http://localhost:8001/docs`
+- `http://localhost:8001/redoc`
+
+## Backend URL Configuration for Cloned Projects
+
+If you clone the project and run the backend on your own machine, use the backend host's LAN IP in the frontend and mobile apps.
+
+### Web app
+In `Smart-Plant-Watering-System/.env.development` or `.env.local`:
+
+```env
+REACT_APP_API_URL=http://<YOUR_BACKEND_IP>:8001
 ```
 
-### Option 3: Using Batch File
-```bash
-cd "e:\Smart Plant Watering System\fastapi-backend"
-.\run-fastapi.bat
+### Mobile app
+In `Smart-Plant-Watering-System-Mobile/.env`:
+
+```env
+EXPO_PUBLIC_API_URL=http://<YOUR_BACKEND_IP>:8001
 ```
 
-FastAPI will be available at: **http://localhost:8001**
+### Notes
+- Use `http://localhost:8001` only when the app and backend run on the same machine.
+- For Android emulators, if `localhost` does not work, try `http://10.0.2.2:8001`.
+- For physical devices, use the host machine's local IP.
 
----
+## API Documentation
 
-## 📚 API Documentation
+Use the built-in FastAPI docs:
+- `http://localhost:8001/docs`
+- `http://localhost:8001/redoc`
 
-Once FastAPI is running, visit:
-- **Interactive Docs**: http://localhost:8001/docs
-- **Health Check**: http://localhost:8001/health
+## Switching Between Backends
 
----
+Update the frontend/mobile environment variables to point to the desired backend.
 
-## 🔄 Switching Between Backends
-
-### Web App (React)
-Edit `.env.local`:
-```
-# Use FastAPI:
-REACT_APP_API_URL=http://localhost:8001/api
-
-# Use Django Local:
-# REACT_APP_API_URL=http://localhost:8000/api
-
-# Use Django Render:
-# REACT_APP_API_URL=https://smart-plant-backend-39w7.onrender.com/api
-```
-
-Then refresh browser.
-
-### Mobile App (React Native)
-Edit `.env`:
-```
-# Use FastAPI:
+### FastAPI example
+```env
 REACT_APP_API_URL=http://192.168.1.10:8001
 EXPO_PUBLIC_API_URL=http://192.168.1.10:8001
-
-# Use Django Local:
-# REACT_APP_API_URL=http://192.168.1.10:8000
-# EXPO_PUBLIC_API_URL=http://192.168.1.10:8000
 ```
 
-Then rebuild app.
+### Django example
+```env
+REACT_APP_API_URL=http://192.168.1.10:8000/api
+EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api
+```
+
+## Database
+
+- Default: SQLite: `sqlite:///./fastapi.db`
+- If you want a clean slate, stop the server, delete `fastapi.db`, then restart.
+- Use DB Browser for SQLite to inspect tables.
+
+## Authentication
+
+Protected endpoints require:
+
+```http
+Authorization: Token <your_token_here>
+```
+
+## Integration Notes
+
+- Web app: set `REACT_APP_API_URL` to this backend host
+- Mobile app: set `EXPO_PUBLIC_API_URL` to this backend host
+- ESP32: send telemetry to `http://<YOUR_BACKEND_IP>:8001/api/iot/telemetry/`
+
+## Troubleshooting
+
+### Backend not reachable
+- Confirm `uvicorn` is running on `0.0.0.0:8001`
+- Make sure firewall allows port `8001`
+- Use host LAN IP for other devices
+
+### CORS issues
+- Add front-end origins to `CORS_ORIGINS`
+- Example:
+  `CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.10:3000`
+
+### Mobile app fails to connect
+- Set `EXPO_PUBLIC_API_URL` to the backend LAN IP
+- Restart Expo after `.env` changes
+- Use tunnel mode if network configuration blocks direct access
+
+## Recommended Clone Workflow
+
+1. Clone repository.
+2. Create `fast-api/.env` from `.env.example`.
+3. Set `HOST=0.0.0.0` and `PORT=8001`.
+4. Add CORS origins for your frontend host.
+5. Start FastAPI.
+6. Set web/mobile backend URLs to the host IP.
 
 ---
 
-## 💾 Database
-
-### View Tables (SQLite)
-
-**Option 1: Using DB Browser for SQLite (Free)**
-1. Download: https://sqlitebrowser.org/
-2. Open file: `fastapi.db`
-3. Browse tables
-
-**Option 2: Using Python Shell**
-```bash
-cd "e:\Smart Plant Watering System\fastapi-backend"
-"e:\Smart Plant Watering System\.venv\Scripts\python" -c "
-from sqlalchemy import inspect, create_engine
-engine = create_engine('sqlite:///./fastapi.db')
-inspector = inspect(engine)
-print('Tables:', inspector.get_table_names())
-"
-```
-
-### Database Tables
-
-1. **users** - User accounts
-   - id, username, email, password_hash, is_staff, is_active, created_at
-
-2. **plants** - Plant data
-   - id, name, type, location, moisture, owner_id, created_at
-
-3. **watering_history** - Watering records
-   - id, plant_id, watered_at, notes
-
-4. **tokens** - Authentication tokens
-   - id, user_id, token, created_at
-
----
-
-## 🔐 Authentication
-
-All protected endpoints require the `Authorization` header:
-
-```
-Authorization: Token <your-jwt-token>
-```
-
-### Getting a Token
-
-**Register**:
-```bash
-curl -X POST "http://localhost:8001/api/users/register/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "password123",
-    "password_confirm": "password123"
-  }'
-```
-
-**Login**:
-```bash
-curl -X POST "http://localhost:8001/api/users/login/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "password": "password123"
-  }'
-```
-
-Response includes `token` - use this for subsequent requests.
-
----
-
-## 🚀 Deploying to Render (Production)
-
-### Step 1: Update Environment Variables
-
-In your Render dashboard, set:
-```
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-DEBUG=False
-SECRET_KEY=<generate-strong-secret-key>
-CORS_ORIGINS=https://yourdomain.com,https://mobile.com
-```
-
-### Step 2: Update .env.production in FastAPI
-
-Edit `fastapi-backend/.env.production`:
-```
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-DEBUG=False
-```
-
-### Step 3: Deploy
-
-The `render.yaml` and `Procfile` are already configured for:
-- `uvicorn main:app --host 0.0.0.0 --port $PORT`
-- Automatic pip install from requirements.txt
-
-Just push to GitHub and Render will auto-deploy!
-
-### Step 4: Keep Render Warm
-Render free tier can hibernate after inactivity, which may cause the first request to return `429 Too Many Requests` while it wakes up.
-
-A GitHub Actions workflow is included at `.github/workflows/keep-fastapi-warm.yml` to ping `https://fast-api-g456.onrender.com/health` every 15 minutes and keep the service responsive during your demo.
-
----
-
-## ✅ Checklist: Local Testing
-
-- [ ] FastAPI running on http://localhost:8001
-- [ ] `/health` endpoint returns "healthy"
-- [ ] Can register new user
-- [ ] Can login with user
-- [ ] Can create plant
-- [ ] Can water plant
-- [ ] Can view watering history
-- [ ] Web app connected to FastAPI
-- [ ] Mobile app connected to FastAPI
-
----
-
-## 🐛 Troubleshooting
-
-### Port 8001 Already in Use
-```bash
-netstat -ano | findstr :8001
-taskkill /PID <PID> /F
-```
-
-### Database Errors
-```bash
-# Delete corrupted database and restart (it will recreate)
-del fastapi.db
-```
-
-### Import Errors
-```bash
-# Reinstall dependencies
-"e:\Smart Plant Watering System\.venv\Scripts\python" -m pip install -r requirements.txt
-```
-
-### Can't connect from mobile
-- Make sure phone is on **same WiFi**
-- Use IP (192.168.1.10) not localhost
-- Firewall might be blocking port 8001
-
----
-
-## 📊 API Endpoints Summary
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/users/register/` | No | Register user |
-| POST | `/api/users/login/` | No | Login user |
-| GET | `/api/users/me/` | Yes | Get current user |
-| POST | `/api/users/logout/` | Yes | Logout |
-| GET | `/api/plants/` | Yes | Get user's plants |
-| POST | `/api/plants/` | Yes | Create plant |
-| PUT | `/api/plants/{id}/` | Yes | Update plant |
-| DELETE | `/api/plants/{id}/` | Yes | Delete plant |
-| POST | `/api/plants/{id}/water/` | Yes | Water plant |
-| GET | `/api/watering_history/` | Yes | Get watering history |
-| GET | `/api/plants/stats/` | Yes | Get user stats |
-
----
-
-**Version**: 1.0.0 (Independent)  
-**Database**: SQLite (local) / PostgreSQL (production)
+FastAPI guide updated for local development and cloned project workflows.

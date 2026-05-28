@@ -99,6 +99,16 @@ void acknowledgeCommand(int commandId) {
 }
 ```
 
+### Note on Backend Host
+
+When cloning this repository or running the ESP32 on a different machine, set `backendBase` to your backend host's LAN IP address:
+
+```cpp
+const String backendBase = "http://<YOUR_BACKEND_IP>:8001/api";
+```
+
+Do not use `localhost` from the ESP32 unless the backend is running on the same device as the ESP32.
+
 ## Notes
 
 - The mobile manual water button now creates a backend command if the plant is linked to an ESP32 device.
